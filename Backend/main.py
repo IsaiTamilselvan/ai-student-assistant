@@ -7,6 +7,8 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_text_splitters import CharacterTextSplitter
+import uuid
+
 
 app = FastAPI()
 
@@ -33,23 +35,36 @@ chunks = text_splitter.split_documents(documents)
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 vectorstore = Chroma.from_documents(chunks, embeddings)
 
-#set memory (fixed 'return_messages')
-memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-
 ##llm 
 llm = ChatOllama(model="qwen2.5:3b", temperature=0)
-qa_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
-    retriever=vectorstore.as_retriever(), # fixed 'as_retriever'
-    memory=memory
-)
+
+sessions: dict[str, ConversationalRetrievalChain]={}
+
+def get_chain_for_session(session_id: str) -> ConversationalRetrievalChain:
+    if session_id not in sessions:
+        memory = ConversationBufferMemory(
+            memory_key="chat_history", return_messages=True
+        )
+        sessions[session_id] = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=vectorstore.as_retriever(),
+            memory=memory,
+        )
+    return sessions[session_id]
 #-------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------
 
 class QueryRequest(BaseModel):
     question: str
+    session_id: str | None =None
 
-@app.post("/chat")
+class QueryResponse(BaseModel):
+    answer: str
+    session_id: str
+
+@app.post("/chat",response_model=QueryResponse)
 def chat_endpoint(request: QueryRequest):
-    response = qa_chain.invoke({"question": request.question})
-    return {"answer": response["answer"]}
+    session_id = request.session_id or str(uuid.uuid4())
+    chain = get_chain_for_session(session_id)
+    response = chain.invoke({"question": request.question})
+    return QueryResponse(answer=response["answer"], session_id=session_id)

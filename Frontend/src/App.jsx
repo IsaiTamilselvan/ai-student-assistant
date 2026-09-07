@@ -31,8 +31,9 @@ function App() {
   };
 
   const clearChat = () => {
-    setMessages([]);
-    localStorage.removeItem('chat_messages');
+      setMessages([]);
+      localStorage.removeItem('chat_messages');
+      resetSession(); // tell the backend to forget this conversation too
   };
 
   return (
