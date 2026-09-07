@@ -1,0 +1,15 @@
+fastapi
+
+uvicorn
+
+pydantic
+
+langchain-classic
+
+langchain-community
+
+langchain-ollama
+
+langchain-text-splitters
+
+chromadb
